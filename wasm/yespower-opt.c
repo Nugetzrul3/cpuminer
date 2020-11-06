@@ -97,7 +97,6 @@
 #include "insecure_memzero.h"
 #include "sha256.h"
 #include "sysendian.h"
-#include "miner.h"
 
 #include "yespower.h"
 
@@ -112,7 +111,6 @@
 #endif
 
 #ifdef __GNUC__
-#undef unlikely
 #define unlikely(exp) __builtin_expect(exp, 0)
 #else
 #define unlikely(exp) (exp)
@@ -497,8 +495,7 @@ typedef struct {
 	((uint64_t)(uint32_t)_mm_cvtsi128_si32(HI32(X)) << 32))
 #endif
 
-//#if defined(__x86_64__) && (defined(__AVX__) || !defined(__GNUC__))
-#if 0 /* XXX The follwoing code is slower XXX */
+#if defined(__x86_64__) && (defined(__AVX__) || !defined(__GNUC__))
 /* 64-bit with AVX */
 /* Force use of 64-bit AND instead of two 32-bit ANDs */
 #undef DECL_SMASK2REG
@@ -952,10 +949,12 @@ static void smix2(uint8_t *B, size_t r, uint32_t N, uint32_t Nloop,
 		} while (Nloop -= 2);
 #if _YESPOWER_OPT_C_PASS_ == 1
 	} else {
-		const salsa20_blk_t * V_j = &V[j * s];
-		j = blockmix_xor(X, V_j, Y, r, ctx) & (N - 1);
-		V_j = &V[j * s];
-		blockmix_xor(Y, V_j, X, r, ctx);
+		do {
+			const salsa20_blk_t * V_j = &V[j * s];
+			j = blockmix_xor(X, V_j, Y, r, ctx) & (N - 1);
+			V_j = &V[j * s];
+			j = blockmix_xor(Y, V_j, X, r, ctx) & (N - 1);
+		} while (Nloop -= 2);
 	}
 #endif
 
@@ -1079,11 +1078,11 @@ int yespower(yespower_local_t *local,
 	SHA256_Buf(src, srclen, sha256);
 
 	if (version == YESPOWER_0_5) {
-		PBKDF2_SHA256(sha256, sizeof(sha256), src, srclen, 1,
+		YESPOWER_PBKDF2_SHA256(sha256, sizeof(sha256), src, srclen, 1,
 		    B, B_size);
 		memcpy(sha256, B, sizeof(sha256));
 		smix(B, r, N, V, XY, &ctx);
-		PBKDF2_SHA256(sha256, sizeof(sha256), B, B_size, 1,
+		YESPOWER_PBKDF2_SHA256(sha256, sizeof(sha256), B, B_size, 1,
 		    (uint8_t *)dst, sizeof(*dst));
 
 		if (pers) {
@@ -1102,7 +1101,7 @@ int yespower(yespower_local_t *local,
 			srclen = 0;
 		}
 
-		PBKDF2_SHA256(sha256, sizeof(sha256), src, srclen, 1, B, 128);
+		YESPOWER_PBKDF2_SHA256(sha256, sizeof(sha256), src, srclen, 1, B, 128);
 		memcpy(sha256, B, sizeof(sha256));
 		smix_1_0(B, r, N, V, XY, &ctx);
 		HMAC_SHA256_Buf(B + B_size - 64, 64,

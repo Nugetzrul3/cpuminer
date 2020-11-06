@@ -1,9 +1,15 @@
 /*-
- * Copyright 2013-2018 Alexander Peslyak
+ * Copyright 2018 Cryply team
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
- * modification, are permitted.
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -16,46 +22,139 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
+ *
+ * This file was originally written by Cryply team as part of the Cryply
+ * coin.
  */
-
-#include "miner.h"
-#include "sysendian.h"
-
-#include <stdio.h>
-#include <string.h>
-#include <stdint.h>
-
 #include "yespower.h"
 
-const char* sha256d_str(
-		const char *coinb1str,
-		const char *xnonce1str,
-		const char *xnonce2str,
-		const char *coinb2str,
-		const char *merklestr)
+#include "algo-gate-api.h"
+
+enum YespowerParamsType {
+    YESPOWER_PARAMS_SUGARCHAIN,
+    YESPOWER_PARAMS_BITZENY,
+    YESPOWER_PARAMS_YENTEN,
+    YESPOWER_PARAMS_JAGARICOIN,
+    YESPOWER_PARAMS_WAVI,
+};
+
+enum YespowerParamsType paramsType = YESPOWER_PARAMS_SUGARCHAIN;
+
+void yespower_hash( const char *input, char *output, uint32_t len )
 {
-	unsigned char merkle_root[64];
-	unsigned char buff[256];
-	static char rv[64 + 1];
-	size_t coinb1_size = strlen(coinb1str) / 2;
-	size_t xnonce1_size = strlen(xnonce1str) / 2;
-	size_t xnonce2_size = strlen(xnonce2str) / 2;
-	size_t coinb2_size = strlen(coinb2str) / 2;
-	size_t coinbase_size = coinb1_size + xnonce1_size + xnonce2_size + coinb2_size;
-	int merkle_count = strlen(merklestr) / (32 * 2);
-	int i;
-	unsigned char coinbase[256];
+    static yespower_params_t params = {
+        .version = YESPOWER_1_0,
+        .N = 2048,
+        .r = 32,
+        .pers = "Satoshi Nakamoto 31/Oct/2008 Proof-of-work is essentially one-CPU-one-vote",
+        .perslen = 74
+    };
 
-	hex2bin(coinbase, coinb1str, coinb1_size);
-	hex2bin(coinbase + coinb1_size, xnonce1str, xnonce1_size);
-	hex2bin(coinbase + coinb1_size + xnonce1_size, xnonce2str, xnonce2_size);
-	hex2bin(coinbase + coinb1_size + xnonce1_size + xnonce2_size, coinb2str, coinb2_size);
-	sha256d(merkle_root, coinbase, coinbase_size);
+    switch (paramsType) {
+        case YESPOWER_PARAMS_SUGARCHAIN:
+            break;
+        case YESPOWER_PARAMS_BITZENY:
+            params.version = YESPOWER_0_5;
+            params.N = 2048;
+            params.r = 8;
+            params.pers = "Client Key";
+            params.perslen = 10;
+            break;
+        case YESPOWER_PARAMS_YENTEN:
+            params.version = YESPOWER_0_5;
+            params.N = 4096;
+            params.r = 16;
+            params.pers = "Client Key";
+            params.perslen = 10;
+            break;
+        case YESPOWER_PARAMS_JAGARICOIN:
+            params.version = YESPOWER_0_5;
+            params.N = 4096;
+            params.r = 24;
+            params.pers = "JagaricoinR";
+            params.perslen = 10;
+            break;
+        case YESPOWER_PARAMS_WAVI:
+            params.version = YESPOWER_0_5;
+            params.N = 4096;
+            params.r = 32;
+            params.pers = "WaviBanana";
+            params.perslen = 10;
+            break;
+        default:
+            break;
+    }
+    yespower_tls( (yespower_binary_t*)input, len, &params, (yespower_binary_t*)output );
+}
 
-	for (i = 0; i < merkle_count; i++) {
-		hex2bin(merkle_root + 32, merklestr + i * 32 * 2, 32);
-		sha256d(merkle_root, merkle_root, 64);
-	}
-	bin2hex(rv, merkle_root, 32);
-	return rv;
+int scanhash_yespower( int thr_id, struct work *work, uint32_t max_nonce,
+                       uint64_t *hashes_done )
+{
+        uint32_t _ALIGN(64) vhash[8];
+        uint32_t _ALIGN(64) endiandata[20];
+        uint32_t *pdata = work->data;
+        uint32_t *ptarget = work->target;
+
+        const uint32_t Htarg = ptarget[7];
+        const uint32_t first_nonce = pdata[19];
+        uint32_t n = first_nonce;
+
+        for (int k = 0; k < 19; k++)
+                be32enc(&endiandata[k], pdata[k]);
+
+        do {
+                be32enc(&endiandata[19], n);
+                yespower_hash((char*) endiandata, (char*) vhash, 80);
+                if (vhash[7] < Htarg && fulltest(vhash, ptarget)) {
+                        work_set_target_ratio( work, vhash );
+                        *hashes_done = n - first_nonce + 1;
+                        pdata[19] = n;
+                        return true;
+                }
+                n++;
+        } while (n < max_nonce && !work_restart[thr_id].restart);
+
+        *hashes_done = n - first_nonce + 1;
+        pdata[19] = n;
+
+        return 0;
+}
+
+int64_t yespower_get_max64()
+{
+  return 0xfffLL;
+}
+
+bool register_yespower_algo( algo_gate_t* gate )
+{
+  gate->optimizations = SSE2_OPT | SHA_OPT;
+  gate->get_max64     = (void*)&yespower_get_max64;
+  gate->scanhash      = (void*)&scanhash_yespower;
+  gate->hash          = (void*)&yespower_hash;
+  gate->set_target    = (void*)&scrypt_set_target;
+  return true;
+};
+
+bool register_yespowerr8_algo( algo_gate_t* gate )
+{
+    paramsType = YESPOWER_PARAMS_BITZENY;
+    return register_yespower_algo(gate);
+}
+
+bool register_yespowerr16_algo( algo_gate_t* gate )
+{
+    paramsType = YESPOWER_PARAMS_YENTEN;
+    return register_yespower_algo(gate);
+}
+
+bool register_yespowerr24_algo( algo_gate_t* gate )
+{
+    paramsType = YESPOWER_PARAMS_JAGARICOIN;
+    return register_yespower_algo(gate);
+}
+
+bool register_yespowerr32_algo( algo_gate_t* gate )
+{
+    paramsType = YESPOWER_PARAMS_WAVI;
+    return register_yespower_algo(gate);
 }

@@ -30,6 +30,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * Use #defines in order to avoid namespace collisions with anyone else's
  * SHA256 code (e.g., the code in OpenSSL).
@@ -115,7 +119,11 @@ void HMAC_SHA256_Buf(const void *, size_t, const void *, size_t, uint8_t[32]);
  * Compute PBKDF2(passwd, salt, c, dkLen) using HMAC-SHA256 as the PRF, and
  * write the output to buf.  The value dkLen must be at most 32 * (2^32 - 1).
  */
-void PBKDF2_SHA256(const uint8_t *, size_t, const uint8_t *, size_t,
+void YESPOWER_PBKDF2_SHA256(const uint8_t *, size_t, const uint8_t *, size_t,
     uint64_t, uint8_t *, size_t);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_SHA256_H_ */

@@ -2,6 +2,7 @@
  * Copyright 2010 Jeff Garzik
  * Copyright 2012-2014 pooler
  * Copyright 2017 ohac
+ * Copyright 2020 Nugetzrul3 & Sugarchain Developers
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -41,7 +42,7 @@ static inline int pretest(const uint32_t *hash, const uint32_t *target)
 const char* miner_thread(const char* blockheader, const char* targetstr,
 		uint32_t first_nonce)
 {
-	char pdata[112];
+	char pdata[80];
 	uint32_t target[8];
 	static char rv[8 + 1 + 64 + 1 + 64 + 1];
 	uint32_t max_nonce = 0xffffffffU;
@@ -50,16 +51,16 @@ const char* miner_thread(const char* blockheader, const char* targetstr,
 	uint32_t n = 0;
 	uint32_t n2 = 0;
 	double diff;
-	uint32_t headerlen = 112;
+	uint32_t headerlen = 80;
 
 	//uint32_t version = be32dec(&blockheader[0]); // version
 
 	yespower_params_t params = {
-		.version = YESPOWER_0_5,
+		.version = YESPOWER_1_0,
 		.N = 2048,
-		.r = 8,
-		.pers = (const uint8_t *)data,
-		.perslen = headerlen
+		.r = 32,
+		.pers = "Satoshi Nakamoto 31/Oct/2008 Proof-of-work is essentially one-CPU-one-vote",
+		.perslen = 74
 	};
 
 	hex2bin((void*)pdata, blockheader, headerlen);
@@ -77,9 +78,6 @@ const char* miner_thread(const char* blockheader, const char* targetstr,
 	}
 	for (int i = 17; i < 20; i++) {
 		data[i] = be32dec(&pdata[i*4]);
-	}
-	for (int i = 0; i < 8; i++) { // sapling root
-		data[20 + i] = be32dec(&pdata[(i+20)*4]);
 	}
 	do {
 		be32enc(&data[19], ++n);

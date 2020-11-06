@@ -31,7 +31,6 @@
 
 #include "insecure_memzero.h"
 #include "sysendian.h"
-#include "miner.h"
 
 #include "sha256.h"
 
@@ -532,7 +531,7 @@ SHA256_Pad_Almost(SHA256_CTX * ctx, uint8_t len[static restrict 8],
  * write the output to buf.  The value dkLen must be at most 32 * (2^32 - 1).
  */
 void
-PBKDF2_SHA256(const uint8_t * passwd, size_t passwdlen, const uint8_t * salt,
+YESPOWER_PBKDF2_SHA256(const uint8_t * passwd, size_t passwdlen, const uint8_t * salt,
     size_t saltlen, uint64_t c, uint8_t * buf, size_t dkLen)
 {
 	HMAC_SHA256_CTX Phctx, PShctx, hctx;
